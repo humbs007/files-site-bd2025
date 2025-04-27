@@ -3,6 +3,7 @@ from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
+# ================== ENEL - ENERGIA ================== #
 class TableEnelEnergia(Base):
     __tablename__ = "table_enel"
 
@@ -80,8 +81,10 @@ class TableEnelEnergia(Base):
     Distrito = Column(String(100), nullable=True, index=True)
     Forma_Envio = Column(String(50), nullable=True)
 
+# ================== ENEL - META ================== #
 class TableEnelMeta(Base):
     __tablename__ = "table_enel"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
     PN_Nome = Column(String(255), nullable=True)
@@ -94,6 +97,7 @@ class TableEnelMeta(Base):
     INS_Consumo_Estimado = Column(Float, nullable=True)
     CC_Conta_Contrato = Column(Integer, nullable=True)
 
+# ================== META - Endereços ================== #
 class TableMeta(Base):
     __tablename__ = "table_meta"
 
@@ -121,15 +125,19 @@ class TableMeta(Base):
     CONSUMO9 = Column(Text, nullable=True, index=True)
     CONSUMO10 = Column(Text, nullable=True, index=True)
 
+# ================== TELEFONIA - META ================== #
 class TableTelefoniaMeta(Base):
     __tablename__ = "table_telefonia"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
     cpf_cnpj = Column(String(18), nullable=True, index=True)
     telefone = Column(String(20), nullable=True)
 
+# ================== TELEFONIA ================== #
 class TableTelefonia(Base):
     __tablename__ = "table_telefonia"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
     cpf_cnpj = Column(String(20), nullable=False)
@@ -137,6 +145,7 @@ class TableTelefonia(Base):
     telefone = Column(String(20), nullable=True)
     email = Column(String(255), nullable=True)
 
+# ================== HISTÓRICO DE BUSCAS ================== #
 class SearchHistory(Base):
     __tablename__ = "searches"
 

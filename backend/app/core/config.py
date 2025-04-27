@@ -10,6 +10,6 @@ class Settings:
     DB_PASS: str = os.getenv("DB_PASS", "Beto9541!")
     DB_NAME: str = os.getenv("DB_NAME", "banco_energia")
     
-    DATABASE_URL: str = f"mysql+aiomysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"  # <-- aqui, troquei asyncmy por aiomysql
+    DATABASE_URL = f"mysql+asyncmy://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 settings = Settings()
