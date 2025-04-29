@@ -1,12 +1,14 @@
 import re
-from fastapi import HTTPException
 
-def validate_cpf(cpf: str) -> str:
-    if not re.fullmatch(r'\d{11}', cpf):
-        raise HTTPException(status_code=400, detail="CPF inválido. Deve conter 11 dígitos numéricos.")
-    return cpf
+def validate_cpf(cpf: str) -> bool:
+    return bool(re.match(r"^\d{3}\.\d{3}\.\d{3}\-\d{2}$", cpf))
 
-def validate_cnpj(cnpj: str) -> str:
-    if not re.fullmatch(r'\d{14}', cnpj):
-        raise HTTPException(status_code=400, detail="CNPJ inválido. Deve conter 14 dígitos numéricos.")
-    return cnpj
+def validate_cnpj(cnpj: str) -> bool:
+    return bool(re.match(r"^\d{2}\.\d{3}\.\d{3}\/\d{4}\-\d{2}$", cnpj))
+
+def validate_cep(cep: str) -> bool:
+    return bool(re.match(r"^\d{5}-\d{3}$", cep))
+
+def format_data(data: str) -> str:
+    # Se precisar tratar datas em DD/MM/AAAA
+    return data.replace("/", "-")
