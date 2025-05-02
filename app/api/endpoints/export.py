@@ -5,7 +5,7 @@ import io
 
 router = APIRouter()
 
-@router.post("/")
+@router.post("/")  # <-- POST
 def export_results(format: str = Body(...), results: dict = Body(...)):
     file_buffer, filename = generate_export(format, results)
     return StreamingResponse(

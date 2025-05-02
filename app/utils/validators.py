@@ -12,3 +12,15 @@ def get_indexed_fields(table):
     cursor.close()
     conn.close()
     return fields
+
+def get_column_type(table, column):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(f"SHOW FIELDS FROM {table} WHERE Field = %s", (column,))
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if result:
+        return result["Type"]  # Ex: decimal(15,5), varchar(255), int
+    return "varchar"

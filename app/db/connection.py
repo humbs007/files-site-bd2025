@@ -1,19 +1,15 @@
-import mysql.connector
-from mysql.connector import pooling
+from sqlalchemy import create_engine
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-dbconfig = {
-    "host": os.getenv("DB_HOST"),
-    "port": int(os.getenv("DB_PORT")),
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD"),
-    "database": os.getenv("DB_NAME")
-}
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = os.getenv("DB_NAME")
 
-connection_pool = pooling.MySQLConnectionPool(pool_name="mypool", pool_size=5, **dbconfig)
+DATABASE_URL = f"mysql+mysqldb://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?connect_timeout=10"
 
-def get_connection():
-    return connection_pool.get_connection()
+engine = create_engine(DATABASE_URL, pool_size=5, max_overflow=10)

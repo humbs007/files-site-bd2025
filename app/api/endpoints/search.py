@@ -1,66 +1,73 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from app.db.connection import get_connection
-from app.utils.validators import get_indexed_fields, validate_operator
+from app.schemas.search import SearchOption1Request
+from app.core.config import engine
+from app.services.search_service import search_with_filters
+from sqlalchemy import text
+import logging
 
 router = APIRouter()
-
-class SearchOption1Request(BaseModel):
-    tables: list[str]
-    field: str
-    operator: str
-    term: str
-
-class SearchOption2Request(BaseModel):
-    number: str
+logger = logging.getLogger(__name__)
 
 @router.post("/option1")
 def search_option1(data: SearchOption1Request):
-    if not validate_operator(data.operator):
-        raise HTTPException(status_code=400, detail="Operador inválido")
-
-    results = []
-
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
-    for table in data.tables:
-        indexed_fields = get_indexed_fields(table)
-        if data.field not in indexed_fields:
-            continue
-
-        query = f"SELECT * FROM {table} WHERE {data.field} {data.operator} %s"
-        cursor.execute(query, (data.term,))
-        rows = cursor.fetchall()
-        if rows:
-            results.append({"table": table, "data": rows})
-
-    cursor.close()
-    conn.close()
-    return {"results": results}
-
-@router.post("/option2")
-def search_option2(data: SearchOption2Request):
-    number = data.number
+    field = data.field
+    operator = data.operator
+    term = data.term
     results = {}
 
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    try:
+        with engine.connect() as conn:
+            for table in data.tables:
+                try:
+                    logger.info(f"[SEARCH_OPTION1] Consultando tabela {table}")
+                    table_results = search_with_filters(conn, table, field, operator, term)
+                    if table_results:
+                        results[table] = table_results
+                except Exception as table_error:
+                    logger.warning(f"[SEARCH_OPTION1] Erro ao consultar {table}: {table_error}")
 
-    cursor.execute("SHOW TABLES")
-    tables = [row[f'Tables_in_{conn.database}'] for row in cursor.fetchall()]
+        if not results:
+            return {"results": []}
 
-    for table in tables:
-        cursor.execute(f"SHOW COLUMNS FROM {table}")
-        columns = [col["Field"] for col in cursor.fetchall()]
-        cpf_cnpj_fields = [c for c in columns if "cpf" in c.lower() or "cnpj" in c.lower()]
-        for field in cpf_cnpj_fields:
-            query = f"SELECT * FROM {table} WHERE {field} = %s"
-            cursor.execute(query, (number,))
-            rows = cursor.fetchall()
-            if rows:
-                results.setdefault(table, []).extend(rows)
+        return {"results": results}
 
-    cursor.close()
-    conn.close()
-    return {"results": results}
+    except Exception as e:
+        logger.error(f"[SEARCH_OPTION1] Erro geral: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno na busca")
+
+
+@router.post("/option2")
+def search_option2(payload: dict):
+    number = payload.get("number")
+    results = {}
+
+    if not number:
+        raise HTTPException(status_code=400, detail="Parâmetro 'number' obrigatório.")
+
+    try:
+        with engine.connect() as conn:
+            tables = ["table_enel", "table_meta", "table_credlink"]
+            field_candidates = ["PN_CPF", "PN_CNPJ", "CPF", "CNPJ"]
+
+            for table in tables:
+                for field in field_candidates:
+                    try:
+                        query = text(f"SELECT * FROM `{table}` WHERE `{field}` = :number LIMIT 100")
+                        logger.info(f"[SEARCH_OPTION2] SQL: {query} | Número: {number}")
+                        result = conn.execute(query, {"number": number})
+                        rows = result.fetchall()
+                        if rows:
+                            results[table] = [dict(row._mapping) for row in rows]
+                            break  # parar após o primeiro campo que der match
+                    except Exception as query_error:
+                        logger.warning(f"[SEARCH_OPTION2] Falha ao consultar {table}.{field} | Erro: {query_error}")
+                        continue
+
+        if not results:
+            raise HTTPException(status_code=404, detail="Nenhum resultado encontrado.")
+
+        return {"results": results}
+
+    except Exception as e:
+        logger.error(f"[SEARCH_OPTION2] Erro geral: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno no servidor.")
