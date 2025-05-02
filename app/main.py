@@ -1,5 +1,3 @@
-# backend/app/main.py
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.endpoints import search, metadata, export
@@ -31,10 +29,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 🔌 Registro dos módulos de rota
-app.include_router(search.router, prefix="/search", tags=["Busca"])
-app.include_router(metadata.router, prefix="/metadata", tags=["Metadados"])
-app.include_router(export.router, prefix="/export", tags=["Exportação"])
+# 🔌 Registro dos módulos de rota com prefixo unificado
+api_prefix = "/api/v1"
+app.include_router(metadata.router, prefix=api_prefix)
+app.include_router(search.router, prefix=api_prefix)
+app.include_router(export.router, prefix=api_prefix)
 
 # 🧪 Endpoint base (saúde)
 @app.get("/")
