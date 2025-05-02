@@ -1,47 +1,53 @@
 from fastapi import APIRouter
-from app.core.config import engine
 from sqlalchemy import inspect
+from app.core.config import engine
 import logging
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-FIELD_LABELS = {
-    "PN_CPF": "CPF (ENEL)",
-    "PN_CNPJ": "CNPJ (ENEL)",
+LABEL_MAP = {
     "CPF": "CPF",
-    "CONSUMO": "Consumo (META)",
-    "CELULAR1": "Celular 1",
-    "TEL_FIXO1": "Telefone Fixo 1",
+    "PN_CPF": "CPF",
+    "PN_CNPJ": "CNPJ",
     "NOME": "Nome Completo",
-    "NOME_MAE": "Nome da Mãe",
     "DT_NASCIMENTO": "Data de Nascimento",
-    "RENDA_PRESUMIDA": "Renda Presumida"
+    "RENDA_PRESUMIDA": "Renda Presumida",
+    "FAIXA_RENDA": "Faixa de Renda",
+    "PN_Nome": "Nome",
+    "INS_Consumo_Estimado": "Consumo Estimado",
+    "PN_RG": "RG",
+    "EMAIL": "E-mail",
+    "PN_Email": "E-mail",
+    "CIDADE": "Cidade",
+    "UF": "UF",
+    "STATUS_RECEITA_FEDERAL": "Situação Receita Federal",
+    "FLAG_OBITO": "Óbito",
+    # adicione mais campos conforme necessário...
 }
 
-def map_label(field):
-    return FIELD_LABELS.get(field, field.replace("_", " ").capitalize())
-
-@router.get("/")
+@router.get("/metadata", tags=["Metadados"])
 def get_metadata():
     try:
-        metadata = {}
         inspector = inspect(engine)
-        valid_tables = ["table_enel", "table_meta", "table_credlink"]
-        all_fields_set = set()
+        result = {}
 
-        for table in valid_tables:
-            indexes = [i['column_names'][0] for i in inspector.get_indexes(table) if 'column_names' in i]
+        for table_name in inspector.get_table_names():
+            indexed_fields = []
 
-            if table == "table_meta":
-                indexes = ['CONSUMO' if f.startswith("CONSUMO") else f for f in indexes]
+            for index in inspector.get_indexes(table_name):
+                for col in index.get("column_names", []):
+                    indexed_fields.append(col)
 
-            metadata[table] = indexes
-            all_fields_set.update(indexes)
+            # remove duplicatas e adiciona label amigável
+            clean_fields = list(set(indexed_fields))
+            formatted = [
+                {"name": field, "label": LABEL_MAP.get(field, field.replace("_", " ").title())}
+                for field in clean_fields
+            ]
+            result[table_name] = sorted(formatted, key=lambda x: x["label"])
 
-        metadata["TODAS"] = sorted(list(all_fields_set))
-        return {"tables": metadata}
-
+        return {"tables": result}
     except Exception as e:
         logger.error(f"[METADATA] Erro ao buscar metadados: {e}")
         return {"tables": {}}
