@@ -1,12 +1,14 @@
+# backend/app/api/endpoints/metadata.py
+
 from fastapi import APIRouter
 from sqlalchemy import inspect
 from app.core.config import engine
-from app.core.logger import logger  # ✅ Logger centralizado
+from app.core.logger import logger
 
 router = APIRouter()
 
 
-@router.get("/tables", tags=["Metadados"])
+@router.get("", tags=["Metadados"])  # 🔧 CORRIGIDO para não usar "/"
 def list_tables():
     """🔍 Retorna todas as tabelas do banco."""
     try:
@@ -19,7 +21,7 @@ def list_tables():
         return {"tables": []}
 
 
-@router.get("/tables/{table_name}/fields", tags=["Metadados"])
+@router.get("/{table_name}/fields", tags=["Metadados"])
 def list_table_fields(table_name: str):
     """📦 Retorna os campos indexados de uma tabela específica."""
     try:
@@ -40,13 +42,12 @@ def list_table_fields(table_name: str):
         return {"fields": []}
 
 
-@router.get("/tables/fields/comuns", tags=["Metadados"])
+@router.get("/fields/comuns", tags=["Metadados"])
 def get_common_fields():
     """
     📌 Campos comuns usados para buscas gerais (opção TODAS).
     """
     try:
-        # 🔐 Campos que se repetem entre as fontes: usados para busca unificada
         fields = ['CPF', 'PN_CPF', 'CNPJ', 'PN_CNPJ']
         logger.info(f"[METADATA] Campos comuns retornados: {fields}")
         return {"fields": sorted(list(set(fields)))}

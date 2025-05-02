@@ -1,28 +1,27 @@
+# backend/app/core/logger.py
+
 import logging
-from logging.handlers import RotatingFileHandler
+import sys
 import os
 
-LOG_DIR = "logs"
-LOG_FILE = os.path.join(LOG_DIR, "buscador_backend.log")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
-os.makedirs(LOG_DIR, exist_ok=True)
+logger = logging.getLogger("buscador")
+logger.setLevel(LOG_LEVEL)
 
-# Formato do log
+# Limpa handlers anteriores (evita duplicações em reload)
+if logger.hasHandlers():
+    logger.handlers.clear()
+
+# StreamHandler para stdout
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(LOG_LEVEL)
+
+# Formatter seguro (sem emojis para terminais Windows)
 formatter = logging.Formatter(
-    "[%(asctime)s] [%(levelname)s] [%(name)s] ▶ %(message)s",
+    fmt='[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-
-# Configuração do arquivo
-file_handler = RotatingFileHandler(LOG_FILE, maxBytes=2_000_000, backupCount=5)
-file_handler.setFormatter(formatter)
-
-# Configuração do console
-console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 
-# Logger principal
-logger = logging.getLogger("buscador")
-logger.setLevel(logging.INFO)
-logger.addHandler(file_handler)
 logger.addHandler(console_handler)
