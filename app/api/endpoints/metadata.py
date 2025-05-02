@@ -1,18 +1,18 @@
 from fastapi import APIRouter
 from sqlalchemy import inspect
 from app.core.config import engine
-import logging
+from app.core.logger import logger  # ✅ Logger centralizado
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
 
 
 @router.get("/tables", tags=["Metadados"])
 def list_tables():
-    """Retorna lista de tabelas disponíveis no banco."""
+    """🔍 Retorna todas as tabelas do banco."""
     try:
         inspector = inspect(engine)
         tables = inspector.get_table_names()
+        logger.info(f"[METADATA] {len(tables)} tabelas carregadas com sucesso.")
         return {"tables": tables}
     except Exception as e:
         logger.error(f"[METADATA] Erro ao buscar tabelas: {e}")
@@ -21,7 +21,7 @@ def list_tables():
 
 @router.get("/tables/{table_name}/fields", tags=["Metadados"])
 def list_table_fields(table_name: str):
-    """Retorna os campos indexados de uma tabela específica."""
+    """📦 Retorna os campos indexados de uma tabela específica."""
     try:
         inspector = inspect(engine)
         indexes = inspector.get_indexes(table_name)
@@ -32,22 +32,25 @@ def list_table_fields(table_name: str):
                 if col not in indexed_fields:
                     indexed_fields.append(col)
 
+        logger.info(f"[METADATA] Tabela '{table_name}': {len(indexed_fields)} campos indexados encontrados.")
         return {"fields": sorted(indexed_fields)}
+
     except Exception as e:
-        logger.error(f"[METADATA] Erro ao buscar campos da tabela {table_name}: {e}")
+        logger.error(f"[METADATA] Erro ao buscar campos da tabela '{table_name}': {e}")
         return {"fields": []}
 
 
 @router.get("/tables/fields/comuns", tags=["Metadados"])
 def get_common_fields():
     """
-    Retorna campos comuns a todas as tabelas, exemplo: CPF, PN_CPF, CNPJ etc.
-    Esses são usados quando 'TODAS' as tabelas são selecionadas.
+    📌 Campos comuns usados para buscas gerais (opção TODAS).
     """
     try:
-        # Campos indexados usados em todas as tabelas
+        # 🔐 Campos que se repetem entre as fontes: usados para busca unificada
         fields = ['CPF', 'PN_CPF', 'CNPJ', 'PN_CNPJ']
+        logger.info(f"[METADATA] Campos comuns retornados: {fields}")
         return {"fields": sorted(list(set(fields)))}
+
     except Exception as e:
         logger.error(f"[METADATA] Erro ao buscar campos comuns: {e}")
         return {"fields": []}
