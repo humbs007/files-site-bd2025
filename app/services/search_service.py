@@ -1,29 +1,44 @@
+# backend/app/services/search_service.py
+
 import logging
-from sqlalchemy.sql import text
 from decimal import Decimal
+from sqlalchemy.sql import text
+from sqlalchemy.engine import Connection
 
 logger = logging.getLogger(__name__)
 
-# Validação simples para evitar SQL Injection
-def is_valid_identifier(name: str) -> bool:
-    return name.replace("_", "").isalnum()
+ALLOWED_OPERATORS = ['=', '!=', '>=', '<=', '>', '<']
 
-# 🔎 Função principal de busca com filtros
-def search_with_filters(conn, table: str, field: str, operator: str, term):
+def validate_table_and_field(name: str) -> str:
+    """Valida nome de tabela/campo para prevenir SQL Injection."""
+    if not name.replace("_", "").isalnum():
+        raise ValueError(f"Nome inválido detectado: {name}")
+    return name
+
+
+def search_with_filters(
+    conn: Connection,
+    table: str,
+    field: str,
+    operator: str,
+    term: str | int | float | Decimal
+):
+    """Executa busca por campo/index com operador e termo definido."""
     try:
-        if operator not in ['=', '!=', '>=', '<=', '>', '<']:
+        validate_table_and_field(table)
+        validate_table_and_field(field)
+
+        if operator not in ALLOWED_OPERATORS:
             raise ValueError(f"Operador inválido: {operator}")
 
-        if not (is_valid_identifier(table) and is_valid_identifier(field)):
-            raise ValueError("Nome de tabela ou campo inválido")
-
-        # Sanitiza o valor do termo
+        # Converte Decimal para string limpa (ex: CPF/CNPJ)
         if isinstance(term, Decimal):
             term = str(term)
 
-        logger.info(f"[SEARCH_OPTION1] SQL: SELECT * FROM {table} WHERE {field} {operator} :term LIMIT 100 | Termo: {term}")
-
         query = text(f"SELECT * FROM `{table}` WHERE `{field}` {operator} :term LIMIT 100")
+
+        logger.info(f"[SEARCH_OPTION1] SQL: {query} | Termo: {term}")
+
         result = conn.execute(query, {"term": term})
         return [dict(row._mapping) for row in result.fetchall()]
 
@@ -32,33 +47,42 @@ def search_with_filters(conn, table: str, field: str, operator: str, term):
         raise
 
 
-# 🔁 Busca geral: percorre múltiplas tabelas e tenta encontrar correspondências por CPF/CNPJ
-def search_in_all_tables(conn, number):
-    from sqlalchemy import inspect
-    inspector = inspect(conn)
-    all_tables = inspector.get_table_names()
-
-    index_fields = {
-        "table_enel": ["PN_CPF", "PN_CNPJ"],
-        "table_meta": ["CPF"],
-        "table_credlink": ["CPF"]
-    }
-
+def search_in_tables_by_term(
+    conn: Connection,
+    term: str | int | Decimal,
+    table_fields: dict[str, list[str]]
+):
+    """Busca geral pelo termo em múltiplas tabelas/campos indexados."""
     results = {}
 
-    for table in all_tables:
-        fields = index_fields.get(table, [])
-        for field in fields:
-            try:
-                logger.info(f"[SEARCH_OPTION2] SQL: SELECT * FROM {table} WHERE {field} = :number LIMIT 100 | Número: {number}")
-                query = text(f"SELECT * FROM `{table}` WHERE `{field}` = :number LIMIT 100")
-                result = conn.execute(query, {"number": str(number)})
-                rows = [dict(row._mapping) for row in result.fetchall()]
-                if rows:
-                    if table not in results:
-                        results[table] = []
-                    results[table].extend(rows)
-            except Exception as e:
-                logger.warning(f"[SEARCH_OPTION2] Falha ao consultar {table}.{field} | Erro: {e}")
+    try:
+        for table, fields in table_fields.items():
+            table = validate_table_and_field(table)
+            matches = []
 
-    return results
+            for field in fields:
+                field = validate_table_and_field(field)
+
+                try:
+                    query = text(f"SELECT * FROM `{table}` WHERE `{field}` = :number LIMIT 100")
+                    logger.info(f"[SEARCH_OPTION2] SQL: {query} | Número: {term}")
+
+                    result = conn.execute(query, {"number": term})
+                    data = [dict(row._mapping) for row in result.fetchall()]
+
+                    if data:
+                        matches.extend(data)
+
+                except Exception as field_error:
+                    logger.warning(
+                        f"[SEARCH_OPTION2] Falha ao consultar {table}.{field} | Erro: {field_error}"
+                    )
+
+            if matches:
+                results[table] = matches
+
+        return results
+
+    except Exception as e:
+        logger.error(f"[SEARCH_OPTION2] Erro geral: {e}")
+        raise
