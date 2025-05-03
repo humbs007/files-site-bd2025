@@ -35,7 +35,6 @@ def search_with_filters(
             term = str(term)
 
         query = text(f"SELECT * FROM `{table}` WHERE `{field}` {operator} :term LIMIT 100")
-
         logger.info(f"[SEARCH_OPTION1] SQL: {query} | Termo: {term}")
 
         result = conn.execute(query, {"term": term})
@@ -53,12 +52,11 @@ def search_in_all_tables(
     """
     Executa busca geral em todas as tabelas conhecidas, nos campos comuns.
     """
-    from app.api.endpoints.metadata import get_common_fields, list_tables
-
     results = {}
     try:
-        # Simula a mesma lógica da rota que retorna campos comuns
+        # Campos comuns manualmente definidos
         common_fields = ['CPF', 'PN_CPF', 'CNPJ', 'PN_CNPJ']
+        from app.api.endpoints.metadata import list_tables
         tables_response = list_tables()
         tables = tables_response.get("tables", [])
 
@@ -74,10 +72,8 @@ def search_in_all_tables(
 
                     result = conn.execute(query, {"number": number})
                     data = [dict(row._mapping) for row in result.fetchall()]
-
                     if data:
                         matches.extend(data)
-
                 except Exception as fe:
                     logger.warning(f"[SEARCH_OPTION2] Erro em {table}.{field}: {fe}")
 

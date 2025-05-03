@@ -1,15 +1,12 @@
-# backend/app/api/endpoints/search.py
-
 from fastapi import APIRouter, HTTPException
 from app.schemas.search import SearchOption1Request
 from app.services.search_service import search_with_filters, search_in_all_tables
 from app.core.config import engine
-from app.core.logger import logger  # ✅ Logger centralizado
+from app.core.logger import logger
 
 router = APIRouter()
 
-
-@router.post("/search/option1", tags=["Busca"])
+@router.post("/option1", tags=["Busca"])  # ✅ Corrigido aqui
 def search_option1(data: SearchOption1Request):
     """🔎 Busca por fonte específica com filtros."""
     field = data.field
@@ -34,8 +31,7 @@ def search_option1(data: SearchOption1Request):
         logger.error(f"[SEARCH_OPTION1] Erro geral: {e}")
         raise HTTPException(status_code=500, detail="Erro interno na busca")
 
-
-@router.post("/search/option2", tags=["Busca"])
+@router.post("/option2", tags=["Busca"])  # ✅ Corrigido aqui
 def search_geral(data: dict):
     """🔎 Busca geral em todas as fontes (por CPF/CNPJ)."""
     try:

@@ -1,5 +1,3 @@
-# backend/app/api/endpoints/metadata.py
-
 from fastapi import APIRouter
 from sqlalchemy import inspect
 from app.core.config import engine
@@ -8,7 +6,7 @@ from app.core.logger import logger
 router = APIRouter()
 
 
-@router.get("", tags=["Metadados"])  # 🔧 CORRIGIDO para não usar "/"
+@router.get("", tags=["Metadados"])  # 🔧 Corrigido para raiz do endpoint
 def list_tables():
     """🔍 Retorna todas as tabelas do banco."""
     try:
@@ -45,12 +43,25 @@ def list_table_fields(table_name: str):
 @router.get("/fields/comuns", tags=["Metadados"])
 def get_common_fields():
     """
-    📌 Campos comuns usados para buscas gerais (opção TODAS).
+    🔁 Retorna todos os campos indexados de todas as tabelas — busca geral (TODAS).
     """
     try:
-        fields = ['CPF', 'PN_CPF', 'CNPJ', 'PN_CNPJ']
-        logger.info(f"[METADATA] Campos comuns retornados: {fields}")
-        return {"fields": sorted(list(set(fields)))}
+        inspector = inspect(engine)
+        all_tables = inspector.get_table_names()
+        field_set = set()
+
+        for table in all_tables:
+            try:
+                indexes = inspector.get_indexes(table)
+                for index in indexes:
+                    for col in index.get("column_names", []):
+                        field_set.add(col)
+            except Exception as table_error:
+                logger.warning(f"[METADATA] Falha ao processar índices da tabela '{table}': {table_error}")
+
+        sorted_fields = sorted(field_set)
+        logger.info(f"[METADATA] {len(sorted_fields)} campos comuns agregados a partir de {len(all_tables)} tabelas.")
+        return {"fields": sorted_fields}
 
     except Exception as e:
         logger.error(f"[METADATA] Erro ao buscar campos comuns: {e}")
