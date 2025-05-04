@@ -1,73 +1,82 @@
 from fastapi import APIRouter
 from sqlalchemy import inspect
-from app.core.config import engine
 from app.core.logger import logger
-from app.services.search_service import FIELD_MAPPINGS_TODAS
+from app.core.config import engine
 
 router = APIRouter()
 
-
 @router.get("", tags=["Metadados"])
 def list_tables():
-    """🔍 Retorna todas as tabelas do banco."""
+    """🔍 Retorna todas as tabelas reais do banco de dados."""
     try:
         inspector = inspect(engine)
         tables = inspector.get_table_names()
         logger.info(f"[METADATA] {len(tables)} tabelas carregadas com sucesso.")
         return {"tables": tables}
     except Exception as e:
-        logger.error(f"[METADATA] Erro ao buscar tabelas: {e}")
+        logger.error(f"[METADATA] Erro ao listar tabelas: {e}")
         return {"tables": []}
-
 
 @router.get("/{table_name}/fields", tags=["Metadados"])
 def list_table_fields(table_name: str):
-    """📦 Retorna os campos indexados de uma tabela específica."""
+    """📦 Retorna os campos indexados da tabela especificada (PK + índices)."""
     try:
         inspector = inspect(engine)
+
+        # Chaves primárias
+        pk_columns = inspector.get_pk_constraint(table_name).get("constrained_columns", [])
         indexes = inspector.get_indexes(table_name)
-        indexed_fields = []
 
+        indexed_columns = set(pk_columns)
         for index in indexes:
-            for col in index.get("column_names", []):
-                if col not in indexed_fields:
-                    indexed_fields.append(col)
+            indexed_columns.update(index.get("column_names", []))
 
-        logger.info(f"[METADATA] Tabela '{table_name}': {len(indexed_fields)} campos indexados encontrados.")
-        return {"fields": sorted(indexed_fields)}
+        indexed_list = sorted(indexed_columns)
+        logger.info(f"[METADATA] {len(indexed_list)} campos indexados encontrados para {table_name}.")
+        return {"fields": indexed_list}
 
     except Exception as e:
-        logger.error(f"[METADATA] Erro ao buscar campos da tabela '{table_name}': {e}")
+        logger.error(f"[METADATA] Erro ao buscar campos indexados de '{table_name}': {e}")
         return {"fields": []}
-
 
 @router.get("/fields/comuns", tags=["Metadados"])
 def get_common_fields():
-    """
-    🔁 Retorna todos os campos indexados de todas as tabelas — busca geral (TODAS).
-    Exclui os campos já mapeados via FIELD_MAPPINGS_TODAS.
-    """
+    """🔁 Agrega campos indexados de todas as tabelas (modo 'TODAS')."""
     try:
         inspector = inspect(engine)
         all_tables = inspector.get_table_names()
-        all_indexed_fields = set()
 
+        common_fields = set()
         for table in all_tables:
-            try:
-                indexes = inspector.get_indexes(table)
-                for index in indexes:
-                    for col in index.get("column_names", []):
-                        all_indexed_fields.add(col)
-            except Exception as table_error:
-                logger.warning(f"[METADATA] Falha ao processar índices da tabela '{table}': {table_error}")
+            pk_columns = inspector.get_pk_constraint(table).get("constrained_columns", [])
+            indexes = inspector.get_indexes(table)
 
-        # Flatten all mapped values
-        mapped_fields_flat = set(f for fields in FIELD_MAPPINGS_TODAS.values() for f in fields)
-        result_fields = sorted(f for f in all_indexed_fields if f not in mapped_fields_flat)
+            columns = set(pk_columns)
+            for idx in indexes:
+                columns.update(idx.get("column_names", []))
 
-        logger.info(f"[METADATA] {len(result_fields)} campos comuns agregados a partir de {len(all_tables)} tabelas.")
-        return {"fields": result_fields}
+            common_fields.update(columns)
+
+        logger.info(f"[METADATA] {len(common_fields)} campos comuns agregados.")
+        return {"fields": sorted(common_fields)}
 
     except Exception as e:
-        logger.error(f"[METADATA] Erro ao buscar campos comuns: {e}")
+        logger.error(f"[METADATA] Erro ao agregar campos comuns: {e}")
         return {"fields": []}
+
+@router.get("/labels/{table}/{field}", tags=["Metadados"])
+def get_friendly_label(table: str, field: str):
+    """🎯 Retorna nome amigável do campo com fallback para o nome real."""
+    try:
+        from app.core.db_schema_config import DB_SCHEMA
+        label = DB_SCHEMA.get("tabelas", {}).get(table, {}).get("campos", {}).get(field, field)
+        return {"label": label}
+    except Exception as e:
+        logger.warning(f"[METADATA] Erro ao buscar label para {table}.{field}: {e}")
+        return {"label": field}
+
+@router.get("/full", tags=["Metadados"])
+def get_full_schema():
+    """🧠 Retorna schema estático para debug/dev."""
+    from app.core.db_schema_config import DB_SCHEMA
+    return DB_SCHEMA

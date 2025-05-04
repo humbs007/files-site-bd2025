@@ -1,12 +1,13 @@
 {
-    "python.pythonPath": ".venv/Scripts/python.exe",
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+    "python.pythonPath": "${workspaceFolder}/.venv/Scripts/python.exe",
     "python.analysis.extraPaths": [
-        "./app"
+      "${workspaceFolder}/app"
     ],
+    "python.analysis.diagnosticMode": "workspace",
     "python.linting.enabled": true,
     "python.linting.pylintEnabled": true,
     "python.formatting.provider": "black",
-    "python.defaultInterpreterPath": ".venv/Scripts/python.exe",
-    "python.analysis.diagnosticMode": "workspace",
     "git.ignoreLimitWarning": true
-}
+  }
+  

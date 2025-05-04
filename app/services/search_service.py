@@ -1,28 +1,18 @@
 import logging
 from decimal import Decimal
+from sqlalchemy import inspect
 from sqlalchemy.sql import text
 from sqlalchemy.engine import Connection
-from app.utils.metadata_utils import list_tables  # ✅ Uso correto, sem dependência circular
+from app.core.database import engine  # ✅ CONEXÃO PRINCIPAL
+from app.core.db_schema_config import DB_SCHEMA  # 🔎 Para labels e mapeamento unificado
 
 logger = logging.getLogger(__name__)
 
 ALLOWED_OPERATORS = ['=', '!=', '>=', '<=', '>', '<']
 
-# Campos mapeados (agregados) para termos unificados como 'CPF/CNPJ'
-FIELD_MAPPINGS_TODAS = {
-    'CPF/CNPJ': ['CPF', 'CNPJ', 'PN_CPF', 'PN_CNPJ', 'cpf', 'cnpj', 'CNPJ_EMPRESA'],
-    'UF Geral': ['UF', 'PN_UF', 'ESTADO', 'UF_EMPRESA'],
-    'CIDADE Geral': ['CIDADE', 'Cidade', 'MUNICIPIO_EMPRESA', 'OL_Municipio_ObjLig'],
-    'Bairro Geral': ['BAIRRO', 'Distrito', 'OL_Bairro_ObjLig'],
-    'CONSUMOS META': [
-        'CONSUMO1', 'CONSUMO2', 'CONSUMO3', 'CONSUMO4', 'CONSUMO5',
-        'CONSUMO6', 'CONSUMO7', 'CONSUMO8', 'CONSUMO9', 'CONSUMO10'
-    ]
-}
-
 
 def validate_table_and_field(name: str) -> str:
-    """Valida nomes de tabela/campo para prevenir SQL Injection."""
+    """✅ Valida nomes para evitar SQL Injection."""
     if not name.replace("_", "").isalnum():
         raise ValueError(f"Nome inválido detectado: {name}")
     return name
@@ -35,7 +25,7 @@ def search_with_filters(
     operator: str,
     term: str | int | float | Decimal
 ):
-    """Executa busca simples em um campo."""
+    """🎯 Executa busca simples por campo único."""
     try:
         validate_table_and_field(table)
         validate_table_and_field(field)
@@ -54,7 +44,7 @@ def search_with_filters(
 
     except Exception as e:
         logger.error(f"[SEARCH_OPTION1] Erro ao executar consulta: {e}")
-        raise
+        return []
 
 
 def search_multiple_fields(
@@ -64,7 +54,7 @@ def search_multiple_fields(
     operator: str,
     term: str | int | float | Decimal
 ):
-    """Tenta buscar em múltiplos campos na tabela, agregando resultados."""
+    """🔁 Executa a busca tentando todos os campos fornecidos."""
     aggregated = []
     for field in fields:
         try:
@@ -78,36 +68,50 @@ def search_multiple_fields(
     return aggregated
 
 
+def get_tables_and_unified_fields():
+    """
+    🧠 Recupera tabelas + campos unificados da config.
+    Se falhar, tenta dinamicamente com SQLAlchemy Inspector.
+    """
+    try:
+        tables = list(DB_SCHEMA.get("tabelas", {}).keys())
+        unified_fields = DB_SCHEMA.get("unificados", {}).get("CPF/CNPJ", [])
+        return tables, unified_fields
+    except Exception as e:
+        logger.warning(f"[SCHEMA_FALLBACK] DB_SCHEMA incompleto, usando fallback via inspector: {e}")
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+        fields_set = set()
+
+        for table in tables:
+            try:
+                pk_cols = inspector.get_pk_constraint(table).get("constrained_columns", [])
+                indexes = inspector.get_indexes(table)
+                for idx in indexes:
+                    fields_set.update(idx.get("column_names", []))
+                fields_set.update(pk_cols)
+            except Exception as e2:
+                logger.warning(f"[SCHEMA_FALLBACK] Falha ao inspecionar {table}: {e2}")
+
+        return tables, sorted(fields_set)
+
+
 def search_in_all_tables(
     conn: Connection,
     number: str | int | Decimal
 ):
-    """
-    Executa busca geral em todos os campos equivalentes a CPF/CNPJ
-    em todas as tabelas listadas pelo sistema.
-    """
+    """🔍 Busca geral em todas as tabelas, em todos os campos unificados ou indexados."""
     results = {}
-
     try:
-        tables_response = list_tables()
-        tables = tables_response.get("tables", [])
+        tables, campos_unificados = get_tables_and_unified_fields()
 
         for table in tables:
             validate_table_and_field(table)
-            logger.info(f"[SEARCH_OPTION2] Buscando em {table} com campos CPF/CNPJ")
-
-            matches = search_multiple_fields(
-                conn,
-                table,
-                FIELD_MAPPINGS_TODAS['CPF/CNPJ'],
-                '=',
-                number
-            )
-
+            logger.info(f"[SEARCH_OPTION2] Buscando em {table} com campos: {campos_unificados}")
+            matches = search_multiple_fields(conn, table, campos_unificados, '=', number)
             if matches:
                 results[table] = matches
 
-        logger.info(f"[SEARCH_OPTION2] Resultado final retornado: {len(results)} tabelas com dados.")
         return results
 
     except Exception as e:

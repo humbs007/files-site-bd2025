@@ -1,10 +1,10 @@
 # backend/app/schemas/search.py
 
-from pydantic import BaseModel, Field
-from typing import List
+from pydantic import BaseModel
+from typing import List, Union
 
 class SearchOption1Request(BaseModel):
-    tables: List[str] = Field(..., example=["table_enel", "table_meta", "table_credlink"])
-    field: str = Field(..., example="PN_CPF")
-    operator: str = Field(..., example="=")
-    term: str = Field(..., example="28545840829")
+    tables: List[str]
+    field: str
+    operator: str
+    term: Union[str, int, float]
