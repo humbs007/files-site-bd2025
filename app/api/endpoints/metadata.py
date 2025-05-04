@@ -2,11 +2,12 @@ from fastapi import APIRouter
 from sqlalchemy import inspect
 from app.core.config import engine
 from app.core.logger import logger
+from app.services.search_service import FIELD_MAPPINGS_TODAS
 
 router = APIRouter()
 
 
-@router.get("", tags=["Metadados"])  # 🔧 Corrigido para raiz do endpoint
+@router.get("", tags=["Metadados"])
 def list_tables():
     """🔍 Retorna todas as tabelas do banco."""
     try:
@@ -44,24 +45,28 @@ def list_table_fields(table_name: str):
 def get_common_fields():
     """
     🔁 Retorna todos os campos indexados de todas as tabelas — busca geral (TODAS).
+    Exclui os campos já mapeados via FIELD_MAPPINGS_TODAS.
     """
     try:
         inspector = inspect(engine)
         all_tables = inspector.get_table_names()
-        field_set = set()
+        all_indexed_fields = set()
 
         for table in all_tables:
             try:
                 indexes = inspector.get_indexes(table)
                 for index in indexes:
                     for col in index.get("column_names", []):
-                        field_set.add(col)
+                        all_indexed_fields.add(col)
             except Exception as table_error:
                 logger.warning(f"[METADATA] Falha ao processar índices da tabela '{table}': {table_error}")
 
-        sorted_fields = sorted(field_set)
-        logger.info(f"[METADATA] {len(sorted_fields)} campos comuns agregados a partir de {len(all_tables)} tabelas.")
-        return {"fields": sorted_fields}
+        # Flatten all mapped values
+        mapped_fields_flat = set(f for fields in FIELD_MAPPINGS_TODAS.values() for f in fields)
+        result_fields = sorted(f for f in all_indexed_fields if f not in mapped_fields_flat)
+
+        logger.info(f"[METADATA] {len(result_fields)} campos comuns agregados a partir de {len(all_tables)} tabelas.")
+        return {"fields": result_fields}
 
     except Exception as e:
         logger.error(f"[METADATA] Erro ao buscar campos comuns: {e}")
