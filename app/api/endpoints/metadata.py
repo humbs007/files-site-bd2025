@@ -1,7 +1,10 @@
+# ✅ backend/app/api/endpoints/metadata.py
+
 from fastapi import APIRouter
 from sqlalchemy import inspect
 from app.core.logger import logger
 from app.core.config import engine
+from app.core.db_schema_config import DB_SCHEMA
 
 router = APIRouter()
 
@@ -17,13 +20,13 @@ def list_tables():
         logger.error(f"[METADATA] Erro ao listar tabelas: {e}")
         return {"tables": []}
 
+
 @router.get("/{table_name}/fields", tags=["Metadados"])
 def list_table_fields(table_name: str):
     """📦 Retorna os campos indexados da tabela especificada (PK + índices)."""
     try:
         inspector = inspect(engine)
 
-        # Chaves primárias
         pk_columns = inspector.get_pk_constraint(table_name).get("constrained_columns", [])
         indexes = inspector.get_indexes(table_name)
 
@@ -39,44 +42,38 @@ def list_table_fields(table_name: str):
         logger.error(f"[METADATA] Erro ao buscar campos indexados de '{table_name}': {e}")
         return {"fields": []}
 
+
 @router.get("/fields/comuns", tags=["Metadados"])
 def get_common_fields():
-    """🔁 Agrega campos indexados de todas as tabelas (modo 'TODAS')."""
+    """🔁 Retorna apenas os campos unificados mapeados (ex: CPF/CNPJ)."""
     try:
-        inspector = inspect(engine)
-        all_tables = inspector.get_table_names()
+        # 🔒 Busca as chaves do bloco unificados
+        unificados = DB_SCHEMA.get("unificados", {})
+        if not unificados:
+            logger.warning("[METADATA] Nenhum campo unificado configurado em DB_SCHEMA.")
+            return {"fields": []}
 
-        common_fields = set()
-        for table in all_tables:
-            pk_columns = inspector.get_pk_constraint(table).get("constrained_columns", [])
-            indexes = inspector.get_indexes(table)
-
-            columns = set(pk_columns)
-            for idx in indexes:
-                columns.update(idx.get("column_names", []))
-
-            common_fields.update(columns)
-
-        logger.info(f"[METADATA] {len(common_fields)} campos comuns agregados.")
-        return {"fields": sorted(common_fields)}
+        campos = list(unificados.keys())
+        logger.info(f"[METADATA] Campos comuns disponíveis via unificados: {campos}")
+        return {"fields": sorted(campos)}
 
     except Exception as e:
-        logger.error(f"[METADATA] Erro ao agregar campos comuns: {e}")
+        logger.error(f"[METADATA] Erro ao obter campos comuns: {e}")
         return {"fields": []}
+
 
 @router.get("/labels/{table}/{field}", tags=["Metadados"])
 def get_friendly_label(table: str, field: str):
     """🎯 Retorna nome amigável do campo com fallback para o nome real."""
     try:
-        from app.core.db_schema_config import DB_SCHEMA
         label = DB_SCHEMA.get("tabelas", {}).get(table, {}).get("campos", {}).get(field, field)
         return {"label": label}
     except Exception as e:
         logger.warning(f"[METADATA] Erro ao buscar label para {table}.{field}: {e}")
         return {"label": field}
 
+
 @router.get("/full", tags=["Metadados"])
 def get_full_schema():
     """🧠 Retorna schema estático para debug/dev."""
-    from app.core.db_schema_config import DB_SCHEMA
     return DB_SCHEMA
