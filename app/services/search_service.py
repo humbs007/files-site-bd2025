@@ -54,18 +54,22 @@ def search_multiple_fields(
     operator: str,
     term: str | int | float | Decimal
 ):
-    """🔁 Executa a busca tentando todos os campos fornecidos."""
-    aggregated = []
+    """🔁 Executa busca tentando todos os campos fornecidos, sem duplicar resultados."""
+    seen = {}
     for field in fields:
         try:
             validate_table_and_field(field)
             logger.info(f"[SEARCH_MULTI] Tentando campo `{field}` em `{table}`")
             rows = search_with_filters(conn, table, field, operator, term)
-            if rows:
-                aggregated.extend(rows)
+
+            for row in rows:
+                row_key = str(row.get("id") or hash(frozenset(row.items())))
+                seen[row_key] = row
+
         except Exception as e:
             logger.warning(f"[SEARCH_MULTI] Falha em {table}.{field}: {e}")
-    return aggregated
+
+    return list(seen.values())
 
 
 def get_tables_and_unified_fields():
@@ -76,6 +80,8 @@ def get_tables_and_unified_fields():
     try:
         tables = list(DB_SCHEMA.get("tabelas", {}).keys())
         unified_fields = DB_SCHEMA.get("unificados", {}).get("CPF/CNPJ", [])
+        if not unified_fields:
+            raise ValueError("Nenhum campo unificado encontrado.")
         return tables, unified_fields
     except Exception as e:
         logger.warning(f"[SCHEMA_FALLBACK] DB_SCHEMA incompleto, usando fallback via inspector: {e}")
@@ -100,7 +106,7 @@ def search_in_all_tables(
     conn: Connection,
     number: str | int | Decimal
 ):
-    """🔍 Busca geral em todas as tabelas, em todos os campos unificados ou indexados."""
+    """🔍 Busca geral em todas as tabelas com campos unificados."""
     results = {}
     try:
         tables, campos_unificados = get_tables_and_unified_fields()
