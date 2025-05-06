@@ -3,9 +3,8 @@ import time
 from decimal import Decimal
 from typing import List, Tuple
 
-from sqlalchemy import inspect, select, and_, or_, func
+from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
-from sqlalchemy.sql.sqltypes import String  # 👈 necessário para verificação de tipo
 
 from app.core.database import engine
 from app.core.db_schema_config import DB_SCHEMA, UNIFIED_FIELDS
@@ -13,12 +12,14 @@ from app.core.query_builder import build_query
 from app.core.validators import validate_table_and_field, validate_operator
 from app.core.utils import normalize_term
 from app.models.table_models import get_model_by_table
+from app.core.filters import build_logic_clauses  # ✅ Correto agora
 
 logger = logging.getLogger(__name__)
 _table_cache = {}
 _cache_ttl = 600  # segundos
 
 
+# 🎯 Busca simples por campo/valor
 def search_with_filters(
     conn: Session,
     table: str,
@@ -42,6 +43,7 @@ def search_with_filters(
         return []
 
 
+# 🔁 Busca em múltiplos campos, sem duplicatas
 def search_multiple_fields(
     conn: Session,
     table: str,
@@ -61,6 +63,7 @@ def search_multiple_fields(
     return list(seen.values())
 
 
+# 🔍 Busca geral com campos unificados
 def search_in_all_tables(
     conn: Session,
     number: str | int | Decimal
@@ -83,6 +86,7 @@ def search_in_all_tables(
         raise
 
 
+# 🧠 Cache com fallback seguro baseado em UNIFIED_FIELDS reais
 def get_tables_and_unified_fields() -> Tuple[List[str], List[str]]:
     now = time.time()
     if "timestamp" in _table_cache and (now - _table_cache["timestamp"] < _cache_ttl):
@@ -127,6 +131,7 @@ def get_tables_and_unified_fields() -> Tuple[List[str], List[str]]:
         return tables, fields_sorted
 
 
+# 🚀 Busca avançada com múltiplos filtros (via filters.py)
 def advanced_search(
     db: Session,
     tables: list[str],
@@ -135,66 +140,30 @@ def advanced_search(
     results = {}
 
     for table in tables:
-        validate_table_and_field(table)
-        model = get_model_by_table(table)
-        if not model:
-            continue
-
-        logic_chain = []
-        for f in filters:
-            sub_clauses = []
-            for field in f["fields"]:
-                validate_table_and_field(field)
-                col = getattr(model, field, None)
-                if col is None:
-                    continue
-
-                term = normalize_term(f["term"])
-                op = f["operator"]
-
-                if isinstance(col.type, String):
-                    col_expr = func.lower(col)
-                    term_expr = term.lower() if isinstance(term, str) else term
-                else:
-                    col_expr = col
-                    term_expr = term
-
-                if op == "=":
-                    clause = col_expr == term_expr
-                elif op == "!=":
-                    clause = col_expr != term_expr
-                elif op == ">":
-                    clause = col > term
-                elif op == "<":
-                    clause = col < term
-                elif op == ">=":
-                    clause = col >= term
-                elif op == "<=":
-                    clause = col <= term
-                elif op.lower() == "like":
-                    if isinstance(col.type, String) and isinstance(term_expr, str):
-                        clause = col_expr.like(f"%{term_expr}%")
-                    else:
-                        continue
-                else:
-                    raise ValueError(f"Operador inválido: {op}")
-
-                sub_clauses.append(clause)
-
-            if not sub_clauses:
+        try:
+            validate_table_and_field(table)
+            model = get_model_by_table(table)
+            if not model:
+                logger.warning(f"[ADV_SEARCH] Model não encontrado para {table}")
                 continue
 
-            logic_op = and_ if f.get("logic", "AND") == "AND" else or_
-            logic_chain.append(logic_op(*sub_clauses))
+            logic_chain, warnings = build_logic_clauses(table, filters)
+            if warnings:
+                for w in warnings:
+                    logger.warning(f"[ADV_SEARCH_WARN] {w}")
 
-        if not logic_chain:
-            continue
+            if not logic_chain:
+                logger.info(f"[ADV_SEARCH] Nenhum filtro aplicável para {table}")
+                continue
 
-        full_query = select(model).where(and_(*logic_chain)).limit(100)
-        result = db.execute(full_query)
-        data = result.scalars().all()
+            full_query = select(model).where(*logic_chain).limit(100)
+            result = db.execute(full_query)
+            data = result.scalars().all()
 
-        if data:
-            results[table] = [row.__dict__ for row in data]
+            if data:
+                results[table] = [row.__dict__ for row in data]
+
+        except Exception as e:
+            logger.exception(f"[ADV_SEARCH] Erro inesperado em tabela {table}: {e}")
 
     return results

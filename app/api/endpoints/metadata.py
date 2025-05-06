@@ -3,18 +3,18 @@
 from fastapi import APIRouter
 from sqlalchemy import inspect
 from app.core.logger import logger
-from app.core.config import engine
-from app.core.db_schema_config import DB_SCHEMA, UNIFIED_KEYS  # 👈 NOVO
+from app.core.database import engine  # ✅ Banco de dados
+from app.core.db_schema_config import DB_SCHEMA, UNIFIED_KEYS  # ✅ Schema e unificados
+from app.core.metadata_cache import get_cached_tables  # ✅ NOVO USO DE CACHE
 
 router = APIRouter()
 
 
 @router.get("", tags=["Metadados"])
 def list_tables():
-    """🔍 Retorna todas as tabelas reais do banco de dados."""
+    """🔍 Retorna todas as tabelas reais do banco de dados (com cache)."""
     try:
-        inspector = inspect(engine)
-        tables = inspector.get_table_names()
+        tables = get_cached_tables()
         logger.info(f"[METADATA] {len(tables)} tabelas carregadas com sucesso.")
         return {"tables": tables}
     except Exception as e:

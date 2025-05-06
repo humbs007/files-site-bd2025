@@ -1,3 +1,5 @@
+# ✅ backend/app/main.py
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.endpoints import metadata, search, export, advanced
@@ -12,6 +14,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# 🌐 Permite conexão com frontend local
 origins = ["http://localhost:3000"]
 app.add_middleware(
     CORSMiddleware,
@@ -21,8 +24,10 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+# 🔌 Prefixo comum da API
 api_prefix = "/api/v1"
 
+# 🚀 Rotas registradas
 app.include_router(metadata.router, prefix=f"{api_prefix}/tables", tags=["Metadados"])
 app.include_router(search.router, prefix=f"{api_prefix}/search", tags=["Busca"])
 app.include_router(export.router, prefix=f"{api_prefix}/export", tags=["Exportação"])

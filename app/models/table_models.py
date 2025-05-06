@@ -20,9 +20,20 @@ def get_model_by_table(table_name: str):
         return _reflected_tables[table_name]
 
     try:
+        # Reflete apenas a tabela necessária
         _metadata.reflect(bind=engine, only=[table_name])
-        table = Table(table_name, _metadata, autoload_with=engine, extend_existing=True)
+        table = Table(
+            table_name,
+            _metadata,
+            autoload_with=engine,
+            extend_existing=True
+        )
 
+        # Verificação de chave primária
+        if not table.primary_key or len(table.primary_key.columns) == 0:
+            raise Exception("Tabela sem chave primária detectada.")
+
+        # Criação dinâmica do model
         model_class = type(
             f"{table_name.capitalize()}Model",
             (Base,),
