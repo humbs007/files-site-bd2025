@@ -4,9 +4,10 @@ from fastapi import APIRouter
 from sqlalchemy import inspect
 from app.core.logger import logger
 from app.core.config import engine
-from app.core.db_schema_config import DB_SCHEMA
+from app.core.db_schema_config import DB_SCHEMA, UNIFIED_KEYS  # 👈 NOVO
 
 router = APIRouter()
+
 
 @router.get("", tags=["Metadados"])
 def list_tables():
@@ -45,18 +46,14 @@ def list_table_fields(table_name: str):
 
 @router.get("/fields/comuns", tags=["Metadados"])
 def get_common_fields():
-    """🔁 Retorna apenas os campos unificados mapeados (ex: CPF/CNPJ)."""
+    """🔁 Retorna os campos unificados usados em buscas cruzadas."""
     try:
-        # 🔒 Busca as chaves do bloco unificados
-        unificados = DB_SCHEMA.get("unificados", {})
-        if not unificados:
-            logger.warning("[METADATA] Nenhum campo unificado configurado em DB_SCHEMA.")
+        if not UNIFIED_KEYS:
+            logger.warning("[METADATA] Nenhum campo unificado encontrado em UNIFIED_FIELDS.")
             return {"fields": []}
 
-        campos = list(unificados.keys())
-        logger.info(f"[METADATA] Campos comuns disponíveis via unificados: {campos}")
-        return {"fields": sorted(campos)}
-
+        logger.info(f"[METADATA] Campos comuns disponíveis via unificados: {UNIFIED_KEYS}")
+        return {"fields": sorted(UNIFIED_KEYS)}
     except Exception as e:
         logger.error(f"[METADATA] Erro ao obter campos comuns: {e}")
         return {"fields": []}

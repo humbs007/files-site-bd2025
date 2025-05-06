@@ -1,125 +1,200 @@
 import logging
+import time
 from decimal import Decimal
-from sqlalchemy import inspect
-from sqlalchemy.sql import text
-from sqlalchemy.engine import Connection
-from app.core.database import engine  # ✅ CONEXÃO PRINCIPAL
-from app.core.db_schema_config import DB_SCHEMA  # 🔎 Para labels e mapeamento unificado
+from typing import List, Tuple
+
+from sqlalchemy import inspect, select, and_, or_, func
+from sqlalchemy.orm import Session
+from sqlalchemy.sql.sqltypes import String  # 👈 necessário para verificação de tipo
+
+from app.core.database import engine
+from app.core.db_schema_config import DB_SCHEMA, UNIFIED_FIELDS
+from app.core.query_builder import build_query
+from app.core.validators import validate_table_and_field, validate_operator
+from app.core.utils import normalize_term
+from app.models.table_models import get_model_by_table
 
 logger = logging.getLogger(__name__)
-
-ALLOWED_OPERATORS = ['=', '!=', '>=', '<=', '>', '<']
-
-
-def validate_table_and_field(name: str) -> str:
-    """✅ Valida nomes para evitar SQL Injection."""
-    if not name.replace("_", "").isalnum():
-        raise ValueError(f"Nome inválido detectado: {name}")
-    return name
+_table_cache = {}
+_cache_ttl = 600  # segundos
 
 
 def search_with_filters(
-    conn: Connection,
+    conn: Session,
     table: str,
     field: str,
     operator: str,
     term: str | int | float | Decimal
 ):
-    """🎯 Executa busca simples por campo único."""
     try:
         validate_table_and_field(table)
         validate_table_and_field(field)
+        validate_operator(operator)
 
-        if operator not in ALLOWED_OPERATORS:
-            raise ValueError(f"Operador inválido: {operator}")
+        query = build_query(table, field, operator)
+        normalized = normalize_term(term)
+        logger.info(f"[SEARCH_OPTION1] SQL: {query} | Termo: {normalized}")
 
-        if isinstance(term, Decimal):
-            term = str(term)
-
-        query = text(f"SELECT * FROM `{table}` WHERE `{field}` {operator} :term LIMIT 100")
-        logger.info(f"[SEARCH_OPTION1] SQL: {query} | Termo: {term}")
-
-        result = conn.execute(query, {"term": term})
+        result = conn.execute(query, {"term": normalized})
         return [dict(row._mapping) for row in result.fetchall()]
-
     except Exception as e:
-        logger.error(f"[SEARCH_OPTION1] Erro ao executar consulta: {e}")
+        logger.error(f"[SEARCH_OPTION1] Erro na consulta: {e}")
         return []
 
 
 def search_multiple_fields(
-    conn: Connection,
+    conn: Session,
     table: str,
-    fields: list[str],
+    fields: List[str],
     operator: str,
     term: str | int | float | Decimal
 ):
-    """🔁 Executa busca tentando todos os campos fornecidos, sem duplicar resultados."""
     seen = {}
     for field in fields:
         try:
-            validate_table_and_field(field)
-            logger.info(f"[SEARCH_MULTI] Tentando campo `{field}` em `{table}`")
             rows = search_with_filters(conn, table, field, operator, term)
-
             for row in rows:
-                row_key = str(row.get("id") or hash(frozenset(row.items())))
-                seen[row_key] = row
-
+                key = str(row.get("id") or hash(frozenset(row.items())))
+                seen[key] = row
         except Exception as e:
             logger.warning(f"[SEARCH_MULTI] Falha em {table}.{field}: {e}")
-
     return list(seen.values())
 
 
-def get_tables_and_unified_fields():
-    """
-    🧠 Recupera tabelas + campos unificados da config.
-    Se falhar, tenta dinamicamente com SQLAlchemy Inspector.
-    """
-    try:
-        tables = list(DB_SCHEMA.get("tabelas", {}).keys())
-        unified_fields = DB_SCHEMA.get("unificados", {}).get("CPF/CNPJ", [])
-        if not unified_fields:
-            raise ValueError("Nenhum campo unificado encontrado.")
-        return tables, unified_fields
-    except Exception as e:
-        logger.warning(f"[SCHEMA_FALLBACK] DB_SCHEMA incompleto, usando fallback via inspector: {e}")
-        inspector = inspect(engine)
-        tables = inspector.get_table_names()
-        fields_set = set()
-
-        for table in tables:
-            try:
-                pk_cols = inspector.get_pk_constraint(table).get("constrained_columns", [])
-                indexes = inspector.get_indexes(table)
-                for idx in indexes:
-                    fields_set.update(idx.get("column_names", []))
-                fields_set.update(pk_cols)
-            except Exception as e2:
-                logger.warning(f"[SCHEMA_FALLBACK] Falha ao inspecionar {table}: {e2}")
-
-        return tables, sorted(fields_set)
-
-
 def search_in_all_tables(
-    conn: Connection,
+    conn: Session,
     number: str | int | Decimal
 ):
-    """🔍 Busca geral em todas as tabelas com campos unificados."""
     results = {}
     try:
-        tables, campos_unificados = get_tables_and_unified_fields()
+        tables, fields = get_tables_and_unified_fields()
+        normalized = normalize_term(number)
 
         for table in tables:
             validate_table_and_field(table)
-            logger.info(f"[SEARCH_OPTION2] Buscando em {table} com campos: {campos_unificados}")
-            matches = search_multiple_fields(conn, table, campos_unificados, '=', number)
+            logger.info(f"[SEARCH_OPTION2] {table} com campos {fields}")
+            matches = search_multiple_fields(conn, table, fields, '=', normalized)
             if matches:
                 results[table] = matches
 
         return results
+    except Exception as e:
+        logger.error(f"[SEARCH_OPTION2] Erro na busca geral: {e}")
+        raise
+
+
+def get_tables_and_unified_fields() -> Tuple[List[str], List[str]]:
+    now = time.time()
+    if "timestamp" in _table_cache and (now - _table_cache["timestamp"] < _cache_ttl):
+        logger.debug("[CACHE] Usando cache de tabelas/campos")
+        return _table_cache["tables"], _table_cache["unified_fields"]
+
+    logger.debug("[CACHE] Recalculando DB_SCHEMA + fallback")
+    try:
+        tables = list(DB_SCHEMA.get("tabelas", {}).keys())
+        unified = UNIFIED_FIELDS.get("CPF/CNPJ", [])
+        if not unified:
+            raise ValueError("Sem campos unificados em UNIFIED_FIELDS")
+
+        _table_cache.update({
+            "timestamp": now,
+            "tables": tables,
+            "unified_fields": unified
+        })
+        return tables, unified
 
     except Exception as e:
-        logger.error(f"[SEARCH_OPTION2] Erro geral: {e}")
-        raise
+        logger.warning(f"[SCHEMA_FALLBACK] Falha ao ler UNIFIED_FIELDS ou DB_SCHEMA: {e}")
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+        fields = set()
+        for table in tables:
+            try:
+                indexes = inspector.get_indexes(table)
+                for idx in indexes:
+                    fields.update(idx.get("column_names", []))
+                pk = inspector.get_pk_constraint(table).get("constrained_columns", [])
+                fields.update(pk)
+            except Exception as e2:
+                logger.warning(f"[SCHEMA_FALLBACK] Falha inspecionando {table}: {e2}")
+
+        fields_sorted = sorted(fields)
+        _table_cache.update({
+            "timestamp": now,
+            "tables": tables,
+            "unified_fields": fields_sorted
+        })
+        return tables, fields_sorted
+
+
+def advanced_search(
+    db: Session,
+    tables: list[str],
+    filters: list[dict]
+) -> dict:
+    results = {}
+
+    for table in tables:
+        validate_table_and_field(table)
+        model = get_model_by_table(table)
+        if not model:
+            continue
+
+        logic_chain = []
+        for f in filters:
+            sub_clauses = []
+            for field in f["fields"]:
+                validate_table_and_field(field)
+                col = getattr(model, field, None)
+                if col is None:
+                    continue
+
+                term = normalize_term(f["term"])
+                op = f["operator"]
+
+                if isinstance(col.type, String):
+                    col_expr = func.lower(col)
+                    term_expr = term.lower() if isinstance(term, str) else term
+                else:
+                    col_expr = col
+                    term_expr = term
+
+                if op == "=":
+                    clause = col_expr == term_expr
+                elif op == "!=":
+                    clause = col_expr != term_expr
+                elif op == ">":
+                    clause = col > term
+                elif op == "<":
+                    clause = col < term
+                elif op == ">=":
+                    clause = col >= term
+                elif op == "<=":
+                    clause = col <= term
+                elif op.lower() == "like":
+                    if isinstance(col.type, String) and isinstance(term_expr, str):
+                        clause = col_expr.like(f"%{term_expr}%")
+                    else:
+                        continue
+                else:
+                    raise ValueError(f"Operador inválido: {op}")
+
+                sub_clauses.append(clause)
+
+            if not sub_clauses:
+                continue
+
+            logic_op = and_ if f.get("logic", "AND") == "AND" else or_
+            logic_chain.append(logic_op(*sub_clauses))
+
+        if not logic_chain:
+            continue
+
+        full_query = select(model).where(and_(*logic_chain)).limit(100)
+        result = db.execute(full_query)
+        data = result.scalars().all()
+
+        if data:
+            results[table] = [row.__dict__ for row in data]
+
+    return results

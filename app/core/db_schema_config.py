@@ -1,6 +1,38 @@
+# ✅ app/core/db_schema_config.py
+
+# 🎯 Chaves unificadas para filtros "TODAS"
+UNIFIED_KEYS = [
+    'CPF/CNPJ',
+    'UF Geral',
+    'CIDADE Geral',
+    'Bairro Geral',
+    'CONSUMOS META'
+]
+
+UNIFIED_FIELDS = {
+    'CPF/CNPJ': [
+        'CPF', 'PN_CPF', 'CNPJ', 'PN_CNPJ', 'cpf', 'cnpj', 'CNPJ_EMPRESA'
+    ],
+    'UF Geral': [
+        'UF', 'PN_UF', 'ESTADO', 'UF_EMPRESA', 'cnpj_uf'
+    ],
+    'CIDADE Geral': [
+        'CIDADE', 'Cidade', 'MUNICIPIO_EMPRESA', 'OL_Municipio_ObjLig'
+    ],
+    'Bairro Geral': [
+        'BAIRRO', 'Distrito', 'OL_Bairro_ObjLig'
+    ],
+    'CONSUMOS META': [
+        'CONSUMO1', 'CONSUMO2', 'CONSUMO3', 'CONSUMO4', 'CONSUMO5',
+        'CONSUMO6', 'CONSUMO7', 'CONSUMO8', 'CONSUMO9', 'CONSUMO10'
+    ]
+}
+
+# 🔒 DB_SCHEMA apenas para labels
 DB_SCHEMA = {
     "tabelas": {
         "table_cemig": {
+            "nome": "CEMIG",
             "campos": {
                 "CPF": "CPF",
                 "Nome": "Nome",
@@ -16,6 +48,7 @@ DB_SCHEMA = {
             }
         },
         "table_credlink": {
+            "nome": "CredLink",
             "campos": {
                 "CPF": "CPF",
                 "NOME": "Nome",
@@ -30,10 +63,14 @@ DB_SCHEMA = {
             }
         },
         "table_enel": {
+            "nome": "ENEL",
             "campos": {
                 "PN_CPF": "CPF",
                 "PN_CNPJ": "CNPJ",
                 "PN_NOME": "Nome",
+                "PN_Email": "Email",
+                "PN_Fone_Celular": "Celular",
+                "PN_Fone_Fixo": "Telefone Fixo",
                 "OL_Bairro_ObjLig": "Bairro",
                 "OL_Municipio_ObjLig": "Município",
                 "OL_Regiao": "Região",
@@ -45,6 +82,7 @@ DB_SCHEMA = {
             }
         },
         "table_meta": {
+            "nome": "META",
             "campos": {
                 "CPF": "CPF",
                 "UF": "UF",
@@ -64,26 +102,32 @@ DB_SCHEMA = {
             }
         },
         "table_plano_saude": {
+            "nome": "PLANO SAÚDE",
             "campos": {
                 "cnpj": "CNPJ",
                 "operadora": "Operadora",
                 "nome": "Nome",
                 "cpf": "CPF",
+                "email": "Email",
                 "valor": "Valor",
+                "telefone1": "Telefone 1",
                 "telefone_empresa": "Telefone da Empresa",
                 "qtd_vidas": "Qtd. Vidas"
             }
         },
         "table_vidatoda": {
+            "nome": "VIDATODA",
             "campos": {
                 "CPF": "CPF",
                 "NOME": "Nome",
                 "MAE": "Nome da Mãe",
                 "NASCIMENTO": "Nascimento",
+                "ENDERECO": "Endereço",
                 "BAIRRO": "Bairro",
                 "CIDADE": "Cidade",
                 "UF": "UF",
                 "CEP": "CEP",
+                "TELEFONE": "Telefone",
                 "PIS": "PIS",
                 "CBO": "CBO",
                 "OCUPACAO": "Ocupação",
@@ -92,24 +136,5 @@ DB_SCHEMA = {
                 "SALARIO_EMPRESA": "Salário Empresa"
             }
         }
-    },
-
-    "unificados": {
-        "CPF/CNPJ": [
-            "CPF", "PN_CPF", "CNPJ", "PN_CNPJ", "cpf", "cnpj", "CNPJ_EMPRESA"
-        ],
-        "UF Geral": [
-            "UF", "UF_EMPRESA"
-        ],
-        "CIDADE Geral": [
-            "Cidade", "CIDADE", "OL_Municipio_ObjLig", "MUNICIPIO_EMPRESA"
-        ],
-        "Bairro Geral": [
-            "BAIRRO", "Bairro", "OL_Bairro_ObjLig", "Distrito"
-        ],
-        "CONSUMOS META": [
-            "CONSUMO1", "CONSUMO2", "CONSUMO3", "CONSUMO4", "CONSUMO5",
-            "CONSUMO6", "CONSUMO7", "CONSUMO8", "CONSUMO9", "CONSUMO10"
-        ]
     }
 }
