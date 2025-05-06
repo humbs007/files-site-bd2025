@@ -1,5 +1,3 @@
-# ✅ backend/app/api/endpoints/metadata.py
-
 from fastapi import APIRouter
 from sqlalchemy import inspect
 from app.core.logger import logger

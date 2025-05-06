@@ -12,7 +12,7 @@ from app.core.query_builder import build_query
 from app.core.validators import validate_table_and_field, validate_operator
 from app.core.utils import normalize_term
 from app.models.table_models import get_model_by_table
-from app.core.filters import build_logic_clauses  # ✅ Correto agora
+from app.core.filters import build_logic_clauses
 
 logger = logging.getLogger(__name__)
 _table_cache = {}
@@ -52,7 +52,14 @@ def search_multiple_fields(
     term: str | int | float | Decimal
 ):
     seen = {}
-    for field in fields:
+    model = get_model_by_table(table)
+    if not model:
+        logger.warning(f"[SEARCH_MULTI] Model ausente para {table}")
+        return []
+
+    valid_fields = [f for f in fields if hasattr(model, f)]
+
+    for field in valid_fields:
         try:
             rows = search_with_filters(conn, table, field, operator, term)
             for row in rows:
@@ -70,13 +77,17 @@ def search_in_all_tables(
 ):
     results = {}
     try:
-        tables, fields = get_tables_and_unified_fields()
+        tables, fields_by_table = get_tables_and_unified_fields()
         normalized = normalize_term(number)
 
         for table in tables:
             validate_table_and_field(table)
-            logger.info(f"[SEARCH_OPTION2] {table} com campos {fields}")
-            matches = search_multiple_fields(conn, table, fields, '=', normalized)
+            model_fields = fields_by_table.get(table, [])
+            if not model_fields:
+                continue
+
+            logger.info(f"[SEARCH_OPTION2] {table} com campos {model_fields}")
+            matches = search_multiple_fields(conn, table, model_fields, '=', normalized)
             if matches:
                 results[table] = matches
 
@@ -87,7 +98,7 @@ def search_in_all_tables(
 
 
 # 🧠 Cache com fallback seguro baseado em UNIFIED_FIELDS reais
-def get_tables_and_unified_fields() -> Tuple[List[str], List[str]]:
+def get_tables_and_unified_fields() -> Tuple[List[str], dict]:
     now = time.time()
     if "timestamp" in _table_cache and (now - _table_cache["timestamp"] < _cache_ttl):
         logger.debug("[CACHE] Usando cache de tabelas/campos")
@@ -95,40 +106,33 @@ def get_tables_and_unified_fields() -> Tuple[List[str], List[str]]:
 
     logger.debug("[CACHE] Recalculando DB_SCHEMA + fallback")
     try:
-        tables = list(DB_SCHEMA.get("tabelas", {}).keys())
-        unified = UNIFIED_FIELDS.get("CPF/CNPJ", [])
-        if not unified:
-            raise ValueError("Sem campos unificados em UNIFIED_FIELDS")
+        inspector = inspect(engine)
+        all_tables = inspector.get_table_names()
+        filtered_tables = []
+        unified_by_table = {}
+
+        for table in all_tables:
+            try:
+                columns = {col["name"] for col in inspector.get_columns(table)}
+                valid_fields = []
+                for group in UNIFIED_FIELDS.values():
+                    valid_fields.extend([f for f in group if f in columns])
+                if valid_fields:
+                    unified_by_table[table] = sorted(set(valid_fields))
+                    filtered_tables.append(table)
+            except Exception as e:
+                logger.warning(f"[CACHE] Falha ao processar tabela {table}: {e}")
 
         _table_cache.update({
             "timestamp": now,
-            "tables": tables,
-            "unified_fields": unified
+            "tables": filtered_tables,
+            "unified_fields": unified_by_table
         })
-        return tables, unified
+        return filtered_tables, unified_by_table
 
     except Exception as e:
-        logger.warning(f"[SCHEMA_FALLBACK] Falha ao ler UNIFIED_FIELDS ou DB_SCHEMA: {e}")
-        inspector = inspect(engine)
-        tables = inspector.get_table_names()
-        fields = set()
-        for table in tables:
-            try:
-                indexes = inspector.get_indexes(table)
-                for idx in indexes:
-                    fields.update(idx.get("column_names", []))
-                pk = inspector.get_pk_constraint(table).get("constrained_columns", [])
-                fields.update(pk)
-            except Exception as e2:
-                logger.warning(f"[SCHEMA_FALLBACK] Falha inspecionando {table}: {e2}")
-
-        fields_sorted = sorted(fields)
-        _table_cache.update({
-            "timestamp": now,
-            "tables": tables,
-            "unified_fields": fields_sorted
-        })
-        return tables, fields_sorted
+        logger.error(f"[CACHE] Falha geral ao obter tabelas/unificados: {e}")
+        return [], {}
 
 
 # 🚀 Busca avançada com múltiplos filtros (via filters.py)
@@ -147,13 +151,25 @@ def advanced_search(
                 logger.warning(f"[ADV_SEARCH] Model não encontrado para {table}")
                 continue
 
-            logic_chain, warnings = build_logic_clauses(table, filters)
+            # ⚠️ Remove campos inexistentes antes de gerar cláusulas
+            safe_filters = []
+            for f in filters:
+                real_fields = [field for field in f["fields"] if hasattr(model, field)]
+                if real_fields:
+                    safe_filters.append({**f, "fields": real_fields})
+                else:
+                    logger.warning(f"[FILTERS] Nenhum campo válido em {f['fields']} para {table}")
+
+            if not safe_filters:
+                logger.info(f"[ADV_SEARCH] Nenhum filtro aplicável para {table}")
+                continue
+
+            logic_chain, warnings = build_logic_clauses(table, safe_filters)
             if warnings:
                 for w in warnings:
                     logger.warning(f"[ADV_SEARCH_WARN] {w}")
 
             if not logic_chain:
-                logger.info(f"[ADV_SEARCH] Nenhum filtro aplicável para {table}")
                 continue
 
             full_query = select(model).where(*logic_chain).limit(100)

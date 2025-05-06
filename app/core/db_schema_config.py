@@ -1,6 +1,6 @@
 # ✅ app/core/db_schema_config.py
 
-# 🎯 Chaves unificadas para filtros "TODAS"
+# 🎯 Chaves lógicas para filtros unificados
 UNIFIED_KEYS = [
     'CPF/CNPJ',
     'UF Geral',
@@ -9,26 +9,56 @@ UNIFIED_KEYS = [
     'CONSUMOS META'
 ]
 
+# 🔗 Campos unificados organizados por tabela
 UNIFIED_FIELDS = {
-    'CPF/CNPJ': [
-        'CPF', 'PN_CPF', 'CNPJ', 'PN_CNPJ', 'cpf', 'cnpj', 'CNPJ_EMPRESA'
-    ],
-    'UF Geral': [
-        'UF', 'PN_UF', 'ESTADO', 'UF_EMPRESA', 'cnpj_uf'
-    ],
-    'CIDADE Geral': [
-        'CIDADE', 'Cidade', 'MUNICIPIO_EMPRESA', 'OL_Municipio_ObjLig'
-    ],
-    'Bairro Geral': [
-        'BAIRRO', 'Distrito', 'OL_Bairro_ObjLig'
-    ],
-    'CONSUMOS META': [
-        'CONSUMO1', 'CONSUMO2', 'CONSUMO3', 'CONSUMO4', 'CONSUMO5',
-        'CONSUMO6', 'CONSUMO7', 'CONSUMO8', 'CONSUMO9', 'CONSUMO10'
-    ]
+    'table_cemig': {
+        'CPF/CNPJ': ['CPF'],
+        'UF Geral': ['UF'],
+        'CIDADE Geral': ['Cidade'],
+        'Bairro Geral': ['Bairro'],
+        'CONSUMOS META': []
+    },
+    'table_credlink': {
+        'CPF/CNPJ': ['CPF'],
+        'UF Geral': ['UF'],
+        'CIDADE Geral': ['CIDADE'],
+        'Bairro Geral': ['BAIRRO'],
+        'CONSUMOS META': []
+    },
+    'table_enel': {
+        'CPF/CNPJ': ['PN_CPF', 'PN_CNPJ'],
+        'UF Geral': ['UF'],
+        'CIDADE Geral': ['OL_Municipio_ObjLig'],
+        'Bairro Geral': ['OL_Bairro_ObjLig'],
+        'CONSUMOS META': ['INS_Consumo_Estimado']
+    },
+    'table_meta': {
+        'CPF/CNPJ': ['CPF'],
+        'UF Geral': ['UF'],
+        'CIDADE Geral': ['CIDADE'],
+        'Bairro Geral': ['BAIRRO'],
+        'CONSUMOS META': [
+            'CONSUMO1', 'CONSUMO2', 'CONSUMO3', 'CONSUMO4', 'CONSUMO5',
+            'CONSUMO6', 'CONSUMO7', 'CONSUMO8', 'CONSUMO9', 'CONSUMO10'
+        ]
+    },
+    'table_plano_saude': {
+        'CPF/CNPJ': ['cpf', 'cnpj'],
+        'UF Geral': [],
+        'CIDADE Geral': [],
+        'Bairro Geral': [],
+        'CONSUMOS META': []
+    },
+    'table_vidatoda': {
+        'CPF/CNPJ': ['CPF', 'CNPJ_EMPRESA'],
+        'UF Geral': ['UF'],
+        'CIDADE Geral': ['CIDADE'],
+        'Bairro Geral': ['BAIRRO'],
+        'CONSUMOS META': []
+    }
 }
 
-# 🔒 DB_SCHEMA apenas para labels
+# 🧠 DB_SCHEMA - Apenas para labels amigáveis
 DB_SCHEMA = {
     "tabelas": {
         "table_cemig": {
