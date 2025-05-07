@@ -1,4 +1,4 @@
-# app/services/search_advanced.py
+# ✅ app/services/search_advanced.py
 
 from sqlalchemy.engine import Connection
 from app.core.database import engine
@@ -26,5 +26,7 @@ def run_advanced_search(tables, filters):
 
             except Exception as e:
                 logger.error(f"[ADVANCED] Erro em {table}: {e}")
+                # retorno vazio explicitamente para evitar quebra geral
+                results[table] = []
 
     return results

@@ -1,3 +1,5 @@
+# ✅ app/services/search_service.py
+
 import logging
 import time
 from decimal import Decimal
@@ -19,14 +21,7 @@ _table_cache = {}
 _cache_ttl = 600  # segundos
 
 
-# 🎯 Busca simples por campo/valor
-def search_with_filters(
-    conn: Session,
-    table: str,
-    field: str,
-    operator: str,
-    term: str | int | float | Decimal
-):
+def search_with_filters(conn: Session, table: str, field: str, operator: str, term: str | int | float | Decimal):
     try:
         validate_table_and_field(table)
         validate_table_and_field(field)
@@ -43,14 +38,7 @@ def search_with_filters(
         return []
 
 
-# 🔁 Busca em múltiplos campos, sem duplicatas
-def search_multiple_fields(
-    conn: Session,
-    table: str,
-    fields: List[str],
-    operator: str,
-    term: str | int | float | Decimal
-):
+def search_multiple_fields(conn: Session, table: str, fields: List[str], operator: str, term: str | int | float | Decimal):
     seen = {}
     model = get_model_by_table(table)
     if not model:
@@ -58,6 +46,9 @@ def search_multiple_fields(
         return []
 
     valid_fields = [f for f in fields if hasattr(model, f)]
+    if not valid_fields:
+        logger.info(f"[SEARCH_MULTI] Nenhum campo válido para {table} entre {fields}")
+        return []
 
     for field in valid_fields:
         try:
@@ -70,11 +61,7 @@ def search_multiple_fields(
     return list(seen.values())
 
 
-# 🔍 Busca geral com campos unificados
-def search_in_all_tables(
-    conn: Session,
-    number: str | int | Decimal
-):
+def search_in_all_tables(conn: Session, number: str | int | Decimal):
     results = {}
     try:
         tables, fields_by_table = get_tables_and_unified_fields()
@@ -97,7 +84,6 @@ def search_in_all_tables(
         raise
 
 
-# 🧠 Cache com fallback seguro baseado em UNIFIED_FIELDS reais
 def get_tables_and_unified_fields() -> Tuple[List[str], dict]:
     now = time.time()
     if "timestamp" in _table_cache and (now - _table_cache["timestamp"] < _cache_ttl):
@@ -113,13 +99,22 @@ def get_tables_and_unified_fields() -> Tuple[List[str], dict]:
 
         for table in all_tables:
             try:
+                logger.debug(f"[CACHE] Processando tabela: {table}")
                 columns = {col["name"] for col in inspector.get_columns(table)}
-                valid_fields = []
-                for group in UNIFIED_FIELDS.values():
-                    valid_fields.extend([f for f in group if f in columns])
-                if valid_fields:
-                    unified_by_table[table] = sorted(set(valid_fields))
+                logger.debug(f"[CACHE] Colunas em {table}: {columns}")
+                valid_fields = {}
+
+                for logical_key, unified_fields in UNIFIED_FIELDS.items():
+                    matching = [f for f in unified_fields if f in columns]
+                    if matching:
+                        valid_fields.setdefault(table, []).extend(matching)
+
+                if valid_fields.get(table):
+                    unified_by_table[table] = sorted(set(valid_fields[table]))
                     filtered_tables.append(table)
+                    logger.info(f"[CACHE] Tabela adicionada: {table} com campos {unified_by_table[table]}")
+                else:
+                    logger.warning(f"[CACHE] Nenhum campo unificado encontrado em {table}")
             except Exception as e:
                 logger.warning(f"[CACHE] Falha ao processar tabela {table}: {e}")
 
@@ -128,6 +123,8 @@ def get_tables_and_unified_fields() -> Tuple[List[str], dict]:
             "tables": filtered_tables,
             "unified_fields": unified_by_table
         })
+
+        logger.info(f"[CACHE] Tabelas indexadas com sucesso: {filtered_tables}")
         return filtered_tables, unified_by_table
 
     except Exception as e:
@@ -135,12 +132,7 @@ def get_tables_and_unified_fields() -> Tuple[List[str], dict]:
         return [], {}
 
 
-# 🚀 Busca avançada com múltiplos filtros (via filters.py)
-def advanced_search(
-    db: Session,
-    tables: list[str],
-    filters: list[dict]
-) -> dict:
+def advanced_search(db: Session, tables: list[str], filters: list[dict]) -> dict:
     results = {}
 
     for table in tables:
@@ -151,7 +143,6 @@ def advanced_search(
                 logger.warning(f"[ADV_SEARCH] Model não encontrado para {table}")
                 continue
 
-            # ⚠️ Remove campos inexistentes antes de gerar cláusulas
             safe_filters = []
             for f in filters:
                 real_fields = [field for field in f["fields"] if hasattr(model, field)]
@@ -170,9 +161,11 @@ def advanced_search(
                     logger.warning(f"[ADV_SEARCH_WARN] {w}")
 
             if not logic_chain:
+                logger.warning(f"[ADV_SEARCH] Nenhuma cláusula lógica válida para {table}")
                 continue
 
             full_query = select(model).where(*logic_chain).limit(100)
+            logger.info(f"[ADV_SEARCH] Executando: {full_query}")
             result = db.execute(full_query)
             data = result.scalars().all()
 

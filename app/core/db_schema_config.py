@@ -3,9 +3,12 @@
 # 🎯 Chaves lógicas para filtros unificados
 UNIFIED_KEYS = [
     'CPF/CNPJ',
-    'UF Geral',
-    'CIDADE Geral',
-    'Bairro Geral',
+    'Nome',
+    'Telefone',
+    'Email',
+    'UF',
+    'CIDADE',
+    'BAIRRO',
     'CONSUMOS META'
 ]
 
@@ -13,30 +16,42 @@ UNIFIED_KEYS = [
 UNIFIED_FIELDS = {
     'table_cemig': {
         'CPF/CNPJ': ['CPF'],
-        'UF Geral': ['UF'],
-        'CIDADE Geral': ['Cidade'],
-        'Bairro Geral': ['Bairro'],
+        'Nome': ['Nome'],
+        'Telefone': ['Telefone'],
+        'Email': ['EMAIL'],
+        'UF': ['UF'],
+        'CIDADE': ['Cidade'],
+        'BAIRRO': ['Bairro'],
         'CONSUMOS META': []
     },
     'table_credlink': {
         'CPF/CNPJ': ['CPF'],
-        'UF Geral': ['UF'],
-        'CIDADE Geral': ['CIDADE'],
-        'Bairro Geral': ['BAIRRO'],
+        'Nome': ['NOME'],
+        'Telefone': ['TEL_FIXO1', 'CELULAR1'],
+        'Email': ['EMAIL'],
+        'UF': ['UF'],
+        'CIDADE': ['CIDADE'],
+        'BAIRRO': ['BAIRRO'],
         'CONSUMOS META': []
     },
     'table_enel': {
         'CPF/CNPJ': ['PN_CPF', 'PN_CNPJ'],
-        'UF Geral': ['UF'],
-        'CIDADE Geral': ['OL_Municipio_ObjLig'],
-        'Bairro Geral': ['OL_Bairro_ObjLig'],
+        'Nome': ['PN_NOME'],
+        'Telefone': ['PN_Fone_Celular', 'PN_Fone_Fixo'],
+        'Email': ['PN_Email'],
+        'UF': ['UF'],
+        'CIDADE': ['OL_Municipio_ObjLig'],
+        'BAIRRO': ['OL_Bairro_ObjLig'],
         'CONSUMOS META': ['INS_Consumo_Estimado']
     },
     'table_meta': {
         'CPF/CNPJ': ['CPF'],
-        'UF Geral': ['UF'],
-        'CIDADE Geral': ['CIDADE'],
-        'Bairro Geral': ['BAIRRO'],
+        'Nome': [],
+        'Telefone': [],
+        'Email': [],
+        'UF': ['UF'],
+        'CIDADE': ['CIDADE'],
+        'BAIRRO': ['BAIRRO'],
         'CONSUMOS META': [
             'CONSUMO1', 'CONSUMO2', 'CONSUMO3', 'CONSUMO4', 'CONSUMO5',
             'CONSUMO6', 'CONSUMO7', 'CONSUMO8', 'CONSUMO9', 'CONSUMO10'
@@ -44,16 +59,22 @@ UNIFIED_FIELDS = {
     },
     'table_plano_saude': {
         'CPF/CNPJ': ['cpf', 'cnpj'],
-        'UF Geral': [],
-        'CIDADE Geral': [],
-        'Bairro Geral': [],
+        'Nome': ['nome'],
+        'Telefone': ['telefone1', 'telefone_empresa'],
+        'Email': ['email'],
+        'UF': [],
+        'CIDADE': [],
+        'BAIRRO': [],
         'CONSUMOS META': []
     },
     'table_vidatoda': {
         'CPF/CNPJ': ['CPF', 'CNPJ_EMPRESA'],
-        'UF Geral': ['UF'],
-        'CIDADE Geral': ['CIDADE'],
-        'Bairro Geral': ['BAIRRO'],
+        'Nome': ['NOME'],
+        'Telefone': ['TELEFONE'],
+        'Email': [],
+        'UF': ['UF'],
+        'CIDADE': ['CIDADE'],
+        'BAIRRO': ['BAIRRO'],
         'CONSUMOS META': []
     }
 }

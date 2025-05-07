@@ -1,5 +1,3 @@
-# ✅ app/core/filters.py
-
 from sqlalchemy.sql import and_, or_, func
 from sqlalchemy.sql.sqltypes import String
 from app.core.utils import normalize_term
@@ -18,7 +16,7 @@ def build_logic_clauses(table: str, filters: list[dict]) -> tuple:
     for f in filters:
         sub_clauses = []
         term = normalize_term(f.get("term"))
-        op = f.get("operator", "=")
+        op = (f.get("operator") or "=").upper()
 
         for field in f.get("fields", []):
             if not hasattr(model, field):
@@ -30,8 +28,10 @@ def build_logic_clauses(table: str, filters: list[dict]) -> tuple:
             col = getattr(model, field)
             col_type = getattr(col, "type", None)
             is_str = isinstance(col_type, String)
-            col_expr = func.lower(col) if is_str else col
-            term_expr = term.lower() if is_str and isinstance(term, str) else term
+            use_lower = is_str and isinstance(term, str) and op in ["=", "LIKE"]
+
+            col_expr = func.lower(col) if use_lower else col
+            term_expr = term.lower() if use_lower else term
 
             try:
                 if op == "=":
@@ -46,7 +46,7 @@ def build_logic_clauses(table: str, filters: list[dict]) -> tuple:
                     clause = col >= term
                 elif op == "<=":
                     clause = col <= term
-                elif op.lower() == "like":
+                elif op == "LIKE":
                     if is_str and isinstance(term_expr, str):
                         clause = col_expr.like(f"%{term_expr}%")
                     else:
@@ -55,14 +55,16 @@ def build_logic_clauses(table: str, filters: list[dict]) -> tuple:
                 else:
                     warnings.append(f"[{table}] Operador inválido '{op}'")
                     continue
-
                 sub_clauses.append(clause)
             except Exception as ex:
+                logger.exception(f"[FILTERS] Erro processando cláusula {field} em {table}")
                 warnings.append(f"[{table}] Erro no campo '{field}': {ex}")
                 continue
 
         if sub_clauses:
-            logic_op = and_ if f.get("logic", "AND") == "AND" else or_
+            logic_raw = f.get("logic")
+            logic = (logic_raw or "AND").upper()
+            logic_op = and_ if logic == "AND" else or_
             logic_chain.append(logic_op(*sub_clauses))
 
     return logic_chain, warnings
